@@ -1,23 +1,52 @@
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
-from backend.app.db.deps import get_db
+from backend.app.db.database import get_db
 from backend.app.models.workflow import Workflow
+from backend.app.schemas.workflow import WorkflowOut, PopularityMetrics
 
-router = APIRouter(prefix="/workflows", tags=["workflows"])
+router = APIRouter(
+    prefix="/workflows",
+    tags=["workflows"]
+)
 
-@router.get("/")
-def list_workflows(
-    platform: str | None = Query(None),
-    country: str | None = Query(None),
-    db: Session = Depends(get_db)
+@router.get(
+    "/top",
+    response_model=list[WorkflowOut]
+)
+def get_top_workflows(
+    platform: str = Query(..., example="youtube"),
+    country: str = Query(..., example="IN"),
+    limit: int = Query(10, le=100),
+    db: Session = Depends(get_db),
 ):
-    query = db.query(Workflow)
+    rows = (
+        db.query(Workflow)
+        .filter(
+            Workflow.platform == platform,
+            Workflow.country == country
+        )
+        .order_by(Workflow.popularity_score.desc())
+        .limit(limit)
+        .all()
+    )
 
-    if platform:
-        query = query.filter(Workflow.platform == platform)
+    results = []
+    for w in rows:
+        results.append(
+            WorkflowOut(
+                workflow=w.workflow_name,
+                platform=w.platform,
+                country=w.country,
+                popularity_score=w.popularity_score,
+                popularity_metrics=PopularityMetrics(
+                    views=w.views,
+                    likes=w.likes,
+                    comments=w.comments,
+                    like_to_view_ratio=w.like_to_view_ratio,
+                    comment_to_view_ratio=w.comment_to_view_ratio,
+                )
+            )
+        )
 
-    if country:
-        query = query.filter(Workflow.country == country)
-
-    return query.all()
+    return results
