@@ -10,43 +10,43 @@ router = APIRouter(
     tags=["workflows"]
 )
 
+
 @router.get(
     "/top",
     response_model=list[WorkflowOut]
 )
 def get_top_workflows(
-    platform: str = Query(..., example="youtube"),
-    country: str = Query(..., example="IN"),
-    limit: int = Query(10, le=100),
+    platform: str = Query(..., description="youtube | discourse | google"),
+    country: str = Query(..., description="US | IN | global"),
+    limit: int = Query(10, ge=1, le=100),
+    offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
 ):
-    rows = (
+    workflows = (
         db.query(Workflow)
         .filter(
             Workflow.platform == platform,
             Workflow.country == country
         )
         .order_by(Workflow.popularity_score.desc())
+        .offset(offset)
         .limit(limit)
         .all()
     )
 
-    results = []
-    for w in rows:
-        results.append(
-            WorkflowOut(
-                workflow=w.workflow_name,
-                platform=w.platform,
-                country=w.country,
-                popularity_score=w.popularity_score,
-                popularity_metrics=PopularityMetrics(
-                    views=w.views,
-                    likes=w.likes,
-                    comments=w.comments,
-                    like_to_view_ratio=w.like_to_view_ratio,
-                    comment_to_view_ratio=w.comment_to_view_ratio,
-                )
+    return [
+        WorkflowOut(
+            workflow=wf.workflow_name,
+            platform=wf.platform,
+            country=wf.country,
+            popularity_metrics=PopularityMetrics(
+                views=wf.views,
+                likes=wf.likes,
+                comments=wf.comments,
+                like_to_view_ratio=wf.like_to_view_ratio,
+                comment_to_view_ratio=wf.comment_to_view_ratio,
+                popularity_score=wf.popularity_score,
             )
         )
-
-    return results
+        for wf in workflows
+    ]
