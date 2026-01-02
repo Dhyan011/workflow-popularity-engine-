@@ -1,6 +1,8 @@
 import time
 import random
 from pytrends.request import TrendReq
+from backend.app.logger import logger
+
 
 from backend.app.db.database import SessionLocal
 from backend.app.models.workflow import Workflow
@@ -16,12 +18,13 @@ KEYWORDS = [
     "n8n ai agent",
 ]
 
-def ingest(country: str):
-    print(f"\nStarting Google Trends ingestion for {country}")
-    db = SessionLocal()
 
-    for keyword in KEYWORDS:
-        try:
+def ingest(country: str):
+    logger.info(f"\nStarting Google Trends ingestion for {country}")
+    try:
+        db = SessionLocal()
+        for keyword in KEYWORDS:
+
             pytrends.build_payload(
                 [keyword],
                 timeframe="today 90-d",
@@ -31,7 +34,7 @@ def ingest(country: str):
             data = pytrends.interest_over_time()
 
             if data.empty:
-                print(f"No trend data for {keyword}")
+                logger.info(f"No trend data for {keyword}")
                 continue
 
             avg_interest = int(data[keyword].mean())
@@ -52,7 +55,7 @@ def ingest(country: str):
                 existing.views = avg_interest
                 existing.likes = peak_interest
                 existing.comments = momentum
-                print(f"Updated trend: {keyword}")
+                logger.info(f"Updated trend: {keyword}")
             else:
                 db.add(
                     Workflow(
@@ -67,19 +70,24 @@ def ingest(country: str):
                         comment_to_view_ratio=0,
                     )
                 )
-                print(f"Inserted trend: {keyword}")
+                logger.info(f"Inserted trend: {keyword}")
 
             db.commit()
 
             # critical: avoid 429
             time.sleep(random.uniform(5, 9))
 
-        except Exception as e:
-            print(f"Skipped {keyword} due to rate limit")
+            # rate limiting
+            logger.warning(f"Skipped {keyword} due to rate limit", exc_info=True)
             time.sleep(15)
+    except Exception:
+        logger.error("Failed to make Google Trends ingestion")
+        db.rollback()
+        raise
+    finally:
+        db.close()
+        logger.info(f"Google Trends ingestion completed for {country}")
 
-    db.close()
-    print(f"Google Trends ingestion completed for {country}")
 
 if __name__ == "__main__":
     ingest("US")

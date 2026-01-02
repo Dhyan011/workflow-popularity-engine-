@@ -17,12 +17,12 @@ def setup_loggers():
     
     # Info+ handler
     info_handler = logging.StreamHandler(sys.stdout)
-    info_handler.format(formatter)
+    info_handler.setFormatter(formatter)
     info_handler.setLevel(logging.INFO)
     
     # error handler
     error_handler = logging.StreamHandler(sys.stderr)
-    error_handler.format(formatter)
+    error_handler.setFormatter(formatter)
     error_handler.setLevel(logging.ERROR)
     
     logger.addHandler(info_handler)
